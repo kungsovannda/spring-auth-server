@@ -36,6 +36,7 @@ public class InitRoleAndUser {
                 .username("kungsovannda")
                 .familyName("Kung")
                 .givenName("Sovannda")
+                .isEnabled(true)
                 .build();
         repo.save(role);
         userRepo.save(user);
