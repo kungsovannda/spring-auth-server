@@ -14,4 +14,7 @@ logging:
     org.springframework.security: debug
 server:
   port: 9000
+  servlet:
+    session:
+      tracking-modes: cookie
 

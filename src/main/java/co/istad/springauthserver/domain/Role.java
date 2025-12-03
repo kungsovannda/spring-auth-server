@@ -1,5 +1,6 @@
 package co.istad.springauthserver.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.jspecify.annotations.Nullable;
@@ -25,6 +26,7 @@ public class Role implements GrantedAuthority {
     @Column(unique = true)
     private String role;
 
+    @JsonIgnore
     @ManyToMany(mappedBy = "roles")
     private List<User> users;
 

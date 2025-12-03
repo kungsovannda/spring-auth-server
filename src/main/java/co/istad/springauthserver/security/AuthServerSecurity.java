@@ -9,10 +9,10 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -20,25 +20,15 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
-import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.oidc.OidcScopes;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
-import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
-import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
-import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.*;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
-import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
@@ -47,8 +37,6 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
-import java.util.Collection;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -67,18 +55,16 @@ public class AuthServerSecurity {
             throws Exception {
 
         http
+                .securityMatcher(EndpointRequest.toAnyEndpoint())
                 .oauth2AuthorizationServer((authorizationServer) -> {
                     http.securityMatcher(authorizationServer.getEndpointsMatcher());
                     authorizationServer
-                            .oidc(Customizer.withDefaults());	// Enable OpenID Connect 1.0
+                            .oidc(Customizer.withDefaults());
                 })
                 .authorizeHttpRequests((authorize) ->
                         authorize
-                                .requestMatchers("/api/v1/users").permitAll()
                                 .anyRequest().authenticated()
                 )
-                // Redirect to the login page when not authenticated from the
-                // authorization endpoint
                 .exceptionHandling((exceptions) -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
@@ -95,13 +81,19 @@ public class AuthServerSecurity {
             throws Exception {
         http
                 .authorizeHttpRequests((authorize) -> authorize
+                        .requestMatchers("/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/users").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/clients").permitAll()
                         .requestMatchers(HttpMethod.GET, "/login", "/css/**", "/js/**", "/images/**").permitAll()
+
                         .anyRequest().authenticated()
                 )
-                .formLogin(form -> form.loginPage("/login").permitAll())
-                .csrf(csrf -> csrf.disable())
-                .httpBasic(Customizer.withDefaults());
+                .formLogin(form ->
+                        form
+                                .loginPage("/login")
+                                .permitAll())
+                .csrf(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable);
 
         return http.build();
     }
@@ -116,24 +108,24 @@ public class AuthServerSecurity {
 //        return new InMemoryUserDetailsManager(userDetails);
 //    }
 
-    @Bean
-    public RegisteredClientRepository registeredClientRepository() {
-        RegisteredClient oidcClient = RegisteredClient.withId(UUID.randomUUID().toString())
-                .clientId("oidc-client")
-                .clientSecret(passwordEncoder.encode("secret"))
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST) // for body secret and id
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .redirectUri("http://127.0.0.1:8080/login/oauth2/code/oidc-client")
-                .postLogoutRedirectUri("http://127.0.0.1:8080/")
-                .scope(OidcScopes.OPENID)
-//                .scope(OidcScopes.PROFILE)
-                .clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
-                .build();
-
-        return new InMemoryRegisteredClientRepository(oidcClient);
-    }
+//    @Bean
+//    public RegisteredClientRepository registeredClientRepository() {
+//        RegisteredClient oidcClient = RegisteredClient.withId(UUID.randomUUID().toString())
+//                .clientId("oidc-client")
+//                .clientSecret(passwordEncoder.encode("secret"))
+//                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST) // for body secret and id
+//                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+//                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+//                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+//                .redirectUri("http://127.0.0.1:8080/login/oauth2/code/oidc-client")
+//                .postLogoutRedirectUri("http://127.0.0.1:8080/")
+//                .scope(OidcScopes.OPENID)
+////                .scope(OidcScopes.PROFILE)
+//                .clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
+//                .build();
+//
+//        return new InMemoryRegisteredClientRepository(oidcClient);
+//    }
 
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
@@ -178,30 +170,30 @@ public class AuthServerSecurity {
         return authProvider;
     }
 
-    @Bean
-    public OAuth2TokenCustomizer<JwtEncodingContext> jwtCustomizer(UserRepository userRepository) {
-        return context -> {
-            if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())
-                    || "id_token".equals(context.getTokenType().getValue())) { // adjust for your Spring version
-                var principal = context.getPrincipal();
-                String username = principal.getName();
-                if (username == null) return;
-
-                User user = userRepository.findByUsername(username).orElseThrow(
-                        () -> new UsernameNotFoundException("User not found")
-                );
-
-                context.getClaims().claims(claims -> {
-                    claims.put("email", user.getEmail());
-                    claims.put("family_name", user.getFamilyName());
-                    claims.put("given_name", user.getGivenName());
-                    claims.put("uuid", user.getUuid());
-                    claims.put("username", user.getUsername());
-                    claims.put("roles", user.getRoles().stream().map(Role::getRole).collect(Collectors.toList()));
-                });
-            }
-        };
-    }
+//    @Bean
+//    public OAuth2TokenCustomizer<JwtEncodingContext> jwtCustomizer(UserRepository userRepository) {
+//        return context -> {
+//            if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())
+//                    || "id_token".equals(context.getTokenType().getValue())) { // adjust for your Spring version
+//                var principal = context.getPrincipal();
+//                String username = principal.getName();
+//                if (username == null) return;
+//
+//                User user = userRepository.findByUsername(username).orElseThrow(
+//                        () -> new UsernameNotFoundException("User not found")
+//                );
+//
+//                context.getClaims().claims(claims -> {
+//                    claims.put("email", user.getEmail());
+//                    claims.put("family_name", user.getFamilyName());
+//                    claims.put("given_name", user.getGivenName());
+//                    claims.put("uuid", user.getUuid());
+//                    claims.put("username", user.getUsername());
+//                    claims.put("roles", user.getRoles().stream().map(Role::getRole).collect(Collectors.toList()));
+//                });
+//            }
+//        };
+//    }
 
 //    @Bean
 //    public JwtAuthenticationConverter jwtAuthenticationConverter() {
